@@ -1,0 +1,109 @@
+# Log10x Retriever Configuration - Production Example
+
+# Production configuration with separate clusters for each role
+
+# GitHub integration (optional)
+# Uncomment to enable fetching config and symbols from GitHub
+# github:
+#   config:
+#     repo: "your-org/tenx-config"
+#     branch: "main"
+#   symbols:
+#     repo: "your-org/tenx-symbols"
+#     branch: "main"
+#     path: "compiled/symbols"
+
+clusters:
+  # Indexer cluster - resource-intensive workload
+  - name: indexer
+    roles: ["index"]
+    
+    # Start with 2 replicas, scale up to 5 based on CPU
+    replicaCount: 2
+    
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5
+      targetCPUUtilizationPercentage: 70
+    
+    # Lower parallelism for index operations (more CPU/memory per operation)
+    maxParallelRequests: 5
+    maxQueuedRequests: 100
+    readinessThresholdPercent: 80
+    
+    # Higher resource allocation for indexing
+    resources:
+      requests:
+        cpu: 2000m
+        memory: 4Gi
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+    
+    # Node affinity for dedicated index nodes (optional)
+    # nodeSelector:
+    #   workload-type: index
+  
+  # Query handler cluster - optimized for concurrent queries
+  - name: query-handler
+    roles: ["query"]
+    
+    replicaCount: 3
+    
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 75
+    
+    # Higher parallelism for query operations
+    maxParallelRequests: 20
+    maxQueuedRequests: 500
+    readinessThresholdPercent: 90
+    
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+  
+  # Pipeline worker cluster - dedicated pipeline execution
+  - name: pipeline-worker
+    roles: ["pipeline"]
+    
+    replicaCount: 5
+    
+    autoscaling:
+      enabled: true
+      minReplicas: 5
+      maxReplicas: 15
+      targetCPUUtilizationPercentage: 80
+    
+    maxParallelRequests: 15
+    maxQueuedRequests: 1000
+    readinessThresholdPercent: 90
+    
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    
+    # Spread across availability zones for high availability
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - pipeline
+              topologyKey: topology.kubernetes.io/zone

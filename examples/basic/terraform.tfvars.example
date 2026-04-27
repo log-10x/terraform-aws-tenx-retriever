@@ -1,0 +1,9 @@
+# Example terraform.tfvars for basic deployment
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS Configuration
+aws_region       = "us-east-1"
+eks_cluster_name = "my-eks-cluster"
+
+# Log10x Configuration
+tenx_api_key = "your-log10x-api-key-here"  # Get from https://console.log10x.com

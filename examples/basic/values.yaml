@@ -1,0 +1,26 @@
+# Log10x Retriever Configuration - Basic Example
+
+# Single all-in-one cluster for development
+clusters:
+  - name: all-in-one
+    # This cluster handles all three roles
+    roles: ["index", "query", "pipeline"]
+
+    # Basic scaling configuration
+    replicaCount: 1
+
+    # Pipeline execution limits
+    maxParallelRequests: 10
+    maxQueuedRequests: 1000
+
+    # Readiness threshold (0-100%)
+    readinessThresholdPercent: 90
+
+    # Resource requests and limits
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
