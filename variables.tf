@@ -162,6 +162,12 @@ variable "metric_filter_name_prefix" {
   default     = ""
 }
 
+variable "metric_filter_dependencies" {
+  description = "Optional list of resources the metric filters should wait for before being created. Required when `create_query_log_group = false` (BYO log group): pass the externally-managed log group resource so Terraform can sequence operations correctly."
+  type        = list(any)
+  default     = []
+}
+
 ###########################################
 # Kubernetes Configuration
 ###########################################

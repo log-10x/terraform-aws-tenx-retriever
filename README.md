@@ -218,6 +218,7 @@ The module creates an IAM role with least-privilege permissions based on actual 
 | `enable_observability_metrics` | Whether to create CloudWatch metric filters that extract operational metrics from the query log group. Requires `tenx_retriever_query_log_group_name`. | `bool` | `true` |
 | `metric_namespace` | CloudWatch namespace for retriever observability metrics. | `string` | `"Log10x/Retriever"` |
 | `metric_filter_name_prefix` | Prefix for metric filter resource names. Empty default derives from `tenx_retriever_query_log_group_name`. | `string` | `""` |
+| `metric_filter_dependencies` | Optional list of resources the metric filters should wait for before being created. Required when `create_query_log_group = false` (BYO log group): pass the externally-managed log group resource so Terraform can sequence operations correctly. | `list(any)` | `[]` |
 
 ### Kubernetes Configuration
 
@@ -402,7 +403,7 @@ Alarms and dashboards are intentionally NOT created by this module — they're e
 
 ### Bring Your Own Log Group
 
-If the CloudWatch log group is managed elsewhere (e.g., a separate observability terraform stack tagged differently), pass `create_query_log_group = false`:
+If the CloudWatch log group is managed elsewhere (e.g., a separate observability terraform stack tagged differently), pass `create_query_log_group = false` along with `metric_filter_dependencies` so Terraform sequences the observability metric filters after the log group is created:
 
 ```hcl
 resource "aws_cloudwatch_log_group" "retriever_query" {
@@ -419,10 +420,13 @@ module "tenx_retriever" {
 
   tenx_retriever_query_log_group_name = aws_cloudwatch_log_group.retriever_query.name
   create_query_log_group              = false
+  metric_filter_dependencies          = [aws_cloudwatch_log_group.retriever_query]
 }
 ```
 
 The module wires IAM and the JVM to use the existing log group. The `query_log_group_arn` output is computed from name + region + account in this case, so downstream IAM policies still resolve correctly.
+
+`metric_filter_dependencies` is needed because the module references the BYO log group only by name (a string), so Terraform can't infer the metric filters should be created after the log group resource. Pass the resource through this variable to wire the ordering explicitly.
 
 ## Troubleshooting
 
@@ -543,7 +547,7 @@ See the [examples/](examples/) directory for complete working examples:
 
 | Name | Source | Version |
 |------|--------|---------|
-| tenx_retriever_infra | log-10x/tenx-retriever-infra/aws | >= 0.9.1 |
+| tenx_retriever_infra | log-10x/tenx-retriever-infra/aws | >= 0.9.2 |
 
 ## Resources
 
