@@ -88,7 +88,7 @@ provider "helm" {
 # Deploy retriever module
 module "tenx_retriever" {
   source  = "log-10x/tenx-retriever/aws"
-  version = "~> 0.4"
+  version = "~> 0.9"
 
   # Required: API key
   tenx_api_key = var.tenx_api_key
@@ -111,7 +111,7 @@ This will create all infrastructure (SQS queues and S3 buckets) and deploy the r
 ```hcl
 module "tenx_retriever" {
   source  = "log-10x/tenx-retriever/aws"
-  version = "~> 0.4"
+  version = "~> 0.9"
 
   # Required
   tenx_api_key      = var.tenx_api_key
@@ -138,7 +138,7 @@ module "tenx_retriever" {
   tenx_retriever_query_log_group_retention = 14
 
   # Helm configuration
-  helm_chart_version = "1.0.9"
+  helm_chart_version = "1.0.12"
   helm_values_file   = "retriever-values.yaml"
 
   # Tagging
@@ -209,6 +209,15 @@ The module creates an IAM role with least-privilege permissions based on actual 
 | `tenx_retriever_index_trigger_suffix` | S3 suffix that triggers indexing (e.g., '.log') | `string` | `""` (all objects) |
 | `tenx_retriever_query_log_group_name` | CloudWatch Logs log group for query event logging. If empty, disabled. | `string` | `""` |
 | `tenx_retriever_query_log_group_retention` | Days to retain query event logs in CloudWatch Logs | `number` | `7` |
+| `create_query_log_group` | Whether the module creates the CloudWatch log group. Set `false` to use an existing log group managed outside this module (still requires `tenx_retriever_query_log_group_name`). | `bool` | `true` |
+
+### Observability Configuration
+
+| Name | Description | Type | Default |
+|------|-------------|------|---------|
+| `enable_observability_metrics` | Whether to create CloudWatch metric filters that extract operational metrics from the query log group. Requires `tenx_retriever_query_log_group_name`. | `bool` | `true` |
+| `metric_namespace` | CloudWatch namespace for retriever observability metrics. | `string` | `"Log10x/Retriever"` |
+| `metric_filter_name_prefix` | Prefix for metric filter resource names. Empty default derives from `tenx_retriever_query_log_group_name`. | `string` | `""` |
 
 ### Kubernetes Configuration
 
@@ -223,7 +232,7 @@ The module creates an IAM role with least-privilege permissions based on actual 
 | Name | Description | Type | Default |
 |------|-------------|------|---------|
 | `helm_release_name` | Helm release name | `string` | `"tenx-retriever"` |
-| `helm_chart_version` | Version of the retriever-10x Helm chart | `string` | `"1.0.9"` |
+| `helm_chart_version` | Version of the retriever-10x Helm chart | `string` | `"1.0.12"` |
 | `helm_values_file` | Path to custom Helm values YAML file | `string` | `""` |
 | `helm_values` | Additional Helm values as a map | `any` | `{}` |
 
@@ -265,7 +274,12 @@ The module creates an IAM role with least-privilege permissions based on actual 
 - `index_results_bucket_name` - Name of the index results S3 bucket
 - `index_write_container` - S3 path for writing index results
 - `query_log_group_name` - Name of the CloudWatch Logs log group for query events (empty if disabled)
-- `query_log_group_arn` - ARN of the CloudWatch Logs log group for query events (empty if disabled)
+- `query_log_group_arn` - ARN of the CloudWatch Logs log group for query events (empty if disabled). Constructed from name + region + account when the consumer brings their own log group via `create_query_log_group = false`.
+
+### Observability Outputs
+
+- `observability_metric_namespace` - CloudWatch namespace where retriever observability metrics are published (empty when metrics are disabled)
+- `observability_metric_names` - Map of canonical metric names. Keys: `stack_overflow`, `scan_complete`, `stream_worker_complete`, `stream_worker_skipped`, `results_writer_complete`, `launch_failed`, `bloom_blobs_scanned`, `bloom_blobs_matched`. Empty values when metrics are disabled.
 
 ### IAM Outputs
 
@@ -292,7 +306,7 @@ If you already have SQS queues and S3 buckets:
 ```hcl
 module "tenx_retriever" {
   source  = "log-10x/tenx-retriever/aws"
-  version = "~> 0.4"
+  version = "~> 0.9"
 
   tenx_api_key      = var.tenx_api_key
   oidc_provider_arn = var.oidc_provider_arn
@@ -316,7 +330,7 @@ If your application needs additional AWS permissions:
 ```hcl
 module "tenx_retriever" {
   source  = "log-10x/tenx-retriever/aws"
-  version = "~> 0.4"
+  version = "~> 0.9"
 
   tenx_api_key      = var.tenx_api_key
   oidc_provider_arn = var.oidc_provider_arn
@@ -340,7 +354,7 @@ Use a custom values file for Helm configuration:
 ```hcl
 module "tenx_retriever" {
   source  = "log-10x/tenx-retriever/aws"
-  version = "~> 0.4"
+  version = "~> 0.9"
 
   tenx_api_key      = var.tenx_api_key
   oidc_provider_arn = var.oidc_provider_arn
@@ -349,6 +363,66 @@ module "tenx_retriever" {
   helm_values_file = "${path.module}/custom-retriever-values.yaml"
 }
 ```
+
+### Observability Metrics
+
+When the query log group is configured (`tenx_retriever_query_log_group_name` is set), the module also creates CloudWatch metric filters that translate retriever log lines into queryable metrics — without any engine changes. Toggle the entire block via `enable_observability_metrics` (default `true`).
+
+Metrics published (namespace defaults to `Log10x/Retriever`):
+
+| Metric | Source log line | Use |
+|---|---|---|
+| `StackOverflowCount` | `StackOverflowError` | Crash detection — alarm on any occurrence |
+| `ScanCompleteCount` | `scan complete:` | Per-query throughput |
+| `StreamWorkerCompleteCount` | `stream worker complete:` | Successful stream-worker completions |
+| `StreamWorkerSkippedCount` | `stream worker skipped:` | Workers that exceeded `processingTimeLimit` — alarm on a sustained surge |
+| `ResultsWriterCompleteCount` | `results writer complete:` | Result-write throughput |
+| `LaunchFailedCount` | `could not launch pipeline` | Pipeline configuration / override mismatch — alarm on any occurrence |
+| `BloomBlobsScanned` | `scan complete:` (JSON `$.fields.scanned`) | Numerator + denominator for the bloom false-positive ratio |
+| `BloomBlobsMatched` | `scan complete:` (JSON `$.fields.matched`) | Use metric math `(matched / scanned) * 100` to track effective bloom hit rate |
+
+Reference the metrics in your own alarms via the module outputs:
+
+```hcl
+resource "aws_cloudwatch_metric_alarm" "retriever_stack_overflow" {
+  alarm_name          = "retriever-stack-overflow"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  threshold           = 0
+  period              = 60
+  statistic           = "Sum"
+  metric_name         = module.tenx_retriever.observability_metric_names.stack_overflow
+  namespace           = module.tenx_retriever.observability_metric_namespace
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [var.oncall_sns_topic_arn]
+}
+```
+
+Alarms and dashboards are intentionally NOT created by this module — they're environment-specific (alarm thresholds, SNS action ARNs, Grafana workspace, etc.).
+
+### Bring Your Own Log Group
+
+If the CloudWatch log group is managed elsewhere (e.g., a separate observability terraform stack tagged differently), pass `create_query_log_group = false`:
+
+```hcl
+resource "aws_cloudwatch_log_group" "retriever_query" {
+  name              = "/tenx/prod/retriever/query"
+  retention_in_days = 14
+  tags              = local.our_tags
+}
+
+module "tenx_retriever" {
+  source  = "log-10x/tenx-retriever/aws"
+  version = "~> 0.9"
+
+  # ... other config ...
+
+  tenx_retriever_query_log_group_name = aws_cloudwatch_log_group.retriever_query.name
+  create_query_log_group              = false
+}
+```
+
+The module wires IAM and the JVM to use the existing log group. The `query_log_group_arn` output is computed from name + region + account in this case, so downstream IAM policies still resolve correctly.
 
 ## Troubleshooting
 
@@ -469,7 +543,7 @@ See the [examples/](examples/) directory for complete working examples:
 
 | Name | Source | Version |
 |------|--------|---------|
-| tenx_retriever_infra | log-10x/tenx-retriever-infra/aws | >= 0.9.0 |
+| tenx_retriever_infra | log-10x/tenx-retriever-infra/aws | >= 0.9.1 |
 
 ## Resources
 
