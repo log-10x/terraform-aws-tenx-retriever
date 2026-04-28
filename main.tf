@@ -5,7 +5,7 @@ locals {
     var.tags,
     {
       terraform-module         = "tenx-retriever"
-      terraform-module-version = "v0.9.2"
+      terraform-module-version = "v0.9.3"
       managed-by               = "terraform"
     }
   )
@@ -82,7 +82,7 @@ data "aws_caller_identity" "current" {}
 # Provision infrastructure (SQS queues and S3 buckets)
 module "tenx_retriever_infra" {
   source  = "log-10x/tenx-retriever-infra/aws"
-  version = ">= 0.9.2"
+  version = ">= 0.9.3"
 
   # SQS Queue names
   tenx_retriever_index_queue_name    = local.index_queue_name
