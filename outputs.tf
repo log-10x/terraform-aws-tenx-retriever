@@ -43,8 +43,24 @@ output "query_log_group_name" {
 }
 
 output "query_log_group_arn" {
-  description = "ARN of the CloudWatch Logs log group for query event logging (empty if disabled)"
+  description = "ARN of the CloudWatch Logs log group for query event logging (empty if disabled). Constructed from name + region + account when the consumer brings their own log group via create_query_log_group = false."
   value       = module.tenx_retriever_infra.query_log_group_arn
+}
+
+###########################################
+# Observability Outputs
+###########################################
+# Surface canonical retriever metric names so consumers can wire alarms +
+# dashboards without reaching into module.tenx_retriever_infra.
+
+output "observability_metric_namespace" {
+  description = "CloudWatch namespace where retriever observability metrics are published. Empty when observability metrics are disabled."
+  value       = module.tenx_retriever_infra.observability_metric_namespace
+}
+
+output "observability_metric_names" {
+  description = "Map of canonical retriever metric names (for consumer alarms/dashboards). Keys: stack_overflow, scan_complete, stream_worker_complete, stream_worker_skipped, results_writer_complete, launch_failed, bloom_blobs_scanned, bloom_blobs_matched. Empty values when observability metrics are disabled."
+  value       = module.tenx_retriever_infra.observability_metric_names
 }
 
 ###########################################
