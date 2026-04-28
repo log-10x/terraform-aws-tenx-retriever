@@ -547,7 +547,7 @@ See the [examples/](examples/) directory for complete working examples:
 
 | Name | Source | Version |
 |------|--------|---------|
-| tenx_retriever_infra | log-10x/tenx-retriever-infra/aws | >= 0.9.2 |
+| tenx_retriever_infra | log-10x/tenx-retriever-infra/aws | >= 0.9.3 |
 
 ## Resources
 
