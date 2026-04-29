@@ -5,7 +5,7 @@ locals {
     var.tags,
     {
       terraform-module         = "tenx-retriever"
-      terraform-module-version = "v0.9.3"
+      terraform-module-version = "v1.0.0"
       managed-by               = "terraform"
     }
   )
